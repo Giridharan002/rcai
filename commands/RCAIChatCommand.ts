@@ -8,10 +8,10 @@ import {
     SlashCommandContext,
 } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { AppSetting } from "../config/Settings";
-import { GenAiStackRequest } from "../lib/RequestChatBot";
+import { GenAiStackQueryRequest } from "../lib/RequestChatBot";
 import { sendMessage } from "../lib/SendMessage";
 import { sendNotification } from "../lib/SendNotification";
-import { RCAiChatApp } from "../RcAIApp";
+import { RCAiChatApp } from "../RcAiApp";
 import { createRCModalview } from "../ui/AskRC";
 
 export class RCAIChatCommand implements ISlashCommand {
@@ -31,22 +31,26 @@ export class RCAIChatCommand implements ISlashCommand {
         const prompt = context.getArguments();
         const room = context.getRoom();
         const sender = context.getSender();
-        const threadId = context.getThreadId()
+        const threadId = context.getThreadId();
 
         if (prompt.length == 0) {
             var askChatGPT_Modal = createRCModalview(
-                modify, room, undefined, threadId
-            )
+                modify,
+                room,
+                undefined,
+                threadId
+            );
             const triggerId = context.getTriggerId();
             if (!triggerId) {
-                return this.app.getLogger().error('TRIGGER UNDEFINED');
+                return this.app.getLogger().error("TRIGGER UNDEFINED");
             }
-            return modify.getUiController().openModalView(askChatGPT_Modal, { triggerId }, sender);
-
+            return modify
+                .getUiController()
+                .openModalView(askChatGPT_Modal, { triggerId }, sender);
         } else {
             const prompt_sentence = prompt.join(" ");
-            const payload = [{"role": "user", "content": prompt_sentence}]
-            const result = await GenAiStackRequest(
+            const payload = prompt_sentence;
+            const result = await GenAiStackQueryRequest(
                 this.app,
                 http,
                 read,
@@ -56,15 +60,21 @@ export class RCAIChatCommand implements ISlashCommand {
             if (result.success) {
                 var before_message = `**Prompt**: ${prompt_sentence}`;
                 var markdown_message =
-                    before_message +
-                    result.content.choices[0].message.content;
-                sendMessage(modify, room, markdown_message, undefined, context.getThreadId());
+                    before_message + result.content.choices[0].message.content;
+                sendMessage(
+                    modify,
+                    room,
+                    markdown_message,
+                    undefined,
+                    context.getThreadId()
+                );
             } else {
                 sendNotification(
                     modify,
                     room,
                     sender,
-                    `**Error!** Could not Request Completion:\n\n` + result.content.error.message
+                    `**Error!** Could not Request Completion:\n\n` +
+                        result.content.error.message
                 );
             }
         }
