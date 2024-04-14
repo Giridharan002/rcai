@@ -21,13 +21,12 @@ import {
 } from "@rocket.chat/apps-engine/definition/uikit";
 import { RCAIChatCommand } from "./commands/RCAIChatCommand";
 import { buttons } from "./config/Buttons";
-// import { settings } from "./config/Settings";
-import { ActionButtonHandler } from "./handlers/ActionButtonHandler";
-import { ViewSubmitHandler } from "./handlers/ViewSubmit";
-import { GenAiStackRequest } from "./lib/RequestChatBot";
+import { GenAiStackQueryRequest } from "./lib/RequestChatBot";
 import { sendDirect } from "./lib/SendDirect";
 import { sendMessage } from "./lib/SendMessage";
 import { sendNotification } from "./lib/SendNotification";
+import { ActionButtonHandler } from "./handlers/ActionButtonHandler";
+import { ViewSubmitHandler } from "./handlers/ViewSubmit";
 
 export class RCAiChatApp extends App implements IPostMessageSent {
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
@@ -38,18 +37,11 @@ export class RCAiChatApp extends App implements IPostMessageSent {
         await configuration.slashCommands.provideSlashCommand(
             new RCAIChatCommand(this)
         );
-        // Providing persistant app settings
-        // await Promise.all(
-        //     settings.map((setting) =>
-        //         configuration.settings.provideSetting(setting)
-        //     )
-        // );
-        // Registering Action Buttons
         await Promise.all(
             buttons.map((button) => configuration.ui.registerButton(button))
         );
     }
-    // register ActionButton Handler
+
     public async executeActionButtonHandler(
         context: UIKitActionButtonInteractionContext,
         read: IRead,
@@ -57,7 +49,6 @@ export class RCAiChatApp extends App implements IPostMessageSent {
         persistence: IPersistence,
         modify: IModify
     ): Promise<IUIKitResponse> {
-        // lets just move this execution to another file to keep DemoApp.ts clean.
         return new ActionButtonHandler().executor(
             context,
             read,
@@ -67,7 +58,7 @@ export class RCAiChatApp extends App implements IPostMessageSent {
             this.getLogger()
         );
     }
-    // register SubmitView Handler
+
     public async executeViewSubmitHandler(
         context: UIKitViewSubmitInteractionContext,
         read: IRead,
@@ -75,7 +66,6 @@ export class RCAiChatApp extends App implements IPostMessageSent {
         persistence: IPersistence,
         modify: IModify
     ) {
-        // same for View SubmitHandler, moving to another Class
         return new ViewSubmitHandler().executor(
             this,
             context,
@@ -86,7 +76,7 @@ export class RCAiChatApp extends App implements IPostMessageSent {
             this.getLogger()
         );
     }
-    // register hook to answer directs
+
     public async executePostMessageSent(
         message: IMessage,
         read: IRead,
@@ -94,33 +84,39 @@ export class RCAiChatApp extends App implements IPostMessageSent {
         persistence: IPersistence,
         modify: IModify
     ): Promise<void> {
-        const { text, editedAt, room, sender } = message;
-        // we only want direct with the app username
+        const { text, room, sender } = message;
         var bot_user = await read.getUserReader().getAppUser();
         if (
             bot_user &&
-            message.room.type == RoomType.DIRECT_MESSAGE && // direct messages
-            message.room.userIds?.includes(bot_user?.id) && // that has bot_user id
-            bot_user?.id !== sender.id // and was not sent by the bot itself
+            message.room.type == RoomType.DIRECT_MESSAGE &&
+            message.room.userIds?.includes(bot_user?.id) &&
+            bot_user?.id !== sender.id
         ) {
-            const result = await GenAiStackRequest(
-                this,
-                http,
-                read,
-                [{"role": "user", "content": message.text}],
-                sender
-            );
-            if (result.success) {
-                var markdown_message = result.content.choices[0].message.content;
-                sendDirect(sender, read, modify, markdown_message);
-            } else {
-                sendNotification(
-                    modify,
-                    room,
-                    sender,
-                    `**Error!** Could not Request Completion:\n\n` +
-                        result.content.error.message
+            // Check if text is defined before proceeding
+            if (text) {
+                const result = await GenAiStackQueryRequest(
+                    this,
+                    http,
+                    read,
+                    text, // Now TypeScript knows text is a string
+                    sender
                 );
+                if (result.success) {
+                    var markdown_message = result.content.choices[0].message.content;
+                    sendDirect(sender, read, modify, markdown_message);
+                } else {
+                    sendNotification(
+                        modify,
+                        room,
+                        sender,
+                        `**Error!** Could not Request Completion:\n\n` +
+                            result.content.error.message
+                    );
+                }
+            } else {
+                // Handle the case where text is undefined
+                // For example, you might want to log an error or send a notification
+                this.getLogger().error('Message text is undefined');
             }
         }
 
