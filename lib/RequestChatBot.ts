@@ -4,32 +4,30 @@ import {
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { AppSetting } from "../config/Settings";
-import { RCAiChatApp } from "../RcAIApp";
+import { RCAiChatApp } from "../RcAiApp";
 
-export async function GenAiStackRequest(
+export async function GenAiStackQueryRequest(
     app: RCAiChatApp,
     http: IHttp,
     read: IRead,
-    question: any,
+    question: string,
     sender: IUser
 ): Promise<any> {
-    // Assuming you have a setting for the API URL
+    // Assuming you have a setting for the GenAI stack API URL
     const { value: GENAI_STACK_API_URL } = await read
         .getEnvironmentReader()
         .getSettings()
         .getById(AppSetting.GENAI_STACK_API_URL);
 
-    // Prepare the request payload
-    const payload = {
-        question: question,
-        rag : true,
-    };
+    // Encode the question to be URL safe
+    const encodedQuestion = encodeURIComponent(question);
 
-    // Make the HTTP request
+    // Prepare the URL with query parameters
+    const url = `${GENAI_STACK_API_URL}/query?text=${encodedQuestion}&rag=false`;
+
+    // Make the HTTP GET request to the GenAI stack's query endpoint
     return http
-        .post(GENAI_STACK_API_URL, {
-            data: payload,
-        })
+        .get(url)
         .then((response) => {
             var result = {
                 success: true,
@@ -39,19 +37,19 @@ export async function GenAiStackRequest(
             };
             if ("error" in response.data) {
                 result["success"] = false;
-                result["content"]["error"]["message"] = result["content"]["error"]["message"].replace("api-keys.", "api-keys");
+                result["content"]["error"]["message"] = response.data["error"]["message"];
             }
             app.getLogger().info(
-                `Got new completion`,
+                `Received response from GenAI stack`,
                 result,
-                `for the payload`,
-                payload
+                `for the question`,
+                question
             );
             return result;
         })
         .catch((error) => {
             app.getLogger().error(
-                `Error while getting new completion for question ${question}: `,
+                `Error while querying GenAI stack for question ${question}: `,
                 error
             );
             return { success: false };
